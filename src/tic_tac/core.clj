@@ -2,61 +2,7 @@
   (:require [clojure.string :as str]
             )
   (:gen-class))
-(def empty-board [[\? \? \?]
-                   [\? \? \?]
-                   [\? \? \?]])
-(-main)
-(def board (atom nil))
-(def current-player (atom nil))
-(def game-on (atom true))
-(defn make-a-move [player board coords]
-  (let [indexed (index-board board)
-        selected (first (filter #(= (first %) coords) indexed))
-        ]
-    (if (= (second selected) \?)
-      (apply-action player board coords)
-      )
-    )
-  )
-@board
-@current-player
-(defn -main
-  "I don't do a whole lot ... yet."
-  [& args]
-  (reset! board empty-board)
-  (reset! current-player \x)
-  (doall (map println empty-board))
-  (doall
-    (println "")
-  (println "introduce coord [r c] USER (x) first"))
-  (flush)
-  (while @game-on
-    (println (str "Current player: " @current-player))
-    (Thread/sleep 1000)
-    (let [input (str/split (read-line) #" ")
-          move [(Integer. (re-find #"\d+" (first input))) (Integer. (re-find #"\d+" (second input)))]
-          next-board (make-a-move @current-player @board move)
-          ]
-      (doall (map println next-board))
-      (reset! board next-board)
-      (let [winner (winner @board)]
-        (if (not-empty winner)
-          (do
-            (println winner)
-            (reset! game-on false)
-            )
-          (if (not-empty (find-with-val @board \?))
-            (reset! current-player (if (= @current-player \x) \o \x))
-            (reset! game-on false)
-            )
-          )
-        )
-      )
-    )
 
-
-
-  )
 
 ;; TODO: use https://github.com/mikera/core.matrix
 (defn columns [matrix]
@@ -171,7 +117,7 @@
         size (count board)
         max (- size 1)
         med (/ max 2)
-        center (first (filter #(= (first %) [med med]) indexed))
+        center (first (filter #(and (= (first %) (= (second %) \?)) [med med]) indexed))
         empty-corners (map #(first %) (filter #(and (or (= (first %) [0 0])
                                                         (= (first %) [0 max])
                                                         (= (first %) [max 0])
@@ -179,16 +125,16 @@
                                                         )
                                                     (= \? (second %)))
                                               indexed))
-        [row col :as opponent-corner] (first (map #(first %) (filter #(and (or (= (first %) [0 0])
+        [row col :as opponent-corner] (some not-empty (map #(first %) (filter #(and (or (= (first %) [0 0])
                                                                                (= (first %) [0 max])
                                                                                (= (first %) [max 0])
                                                                                (= (first %) [max max])
                                                                                )
                                                                            (= opponent (second %)))
                                                                      indexed)))
-        opposite-corner (remove #(or (= % [(if (zero? row) max 0) (if (zero? col) max 0)])
+        opposite-corner (if opponent-corner (remove #(or (= % [(if (zero? row) max 0) (if (zero? col) max 0)])
                                      (= % [row col]))
-                                empty-corners)
+                                empty-corners))
         ;[(if (zero? row) max 0) (if (zero? col) max 0)]
         empty-sides (map #(first %) (filter #(and (or (= (first %) [0 med])
                                  (= (first %) [med 0])
@@ -201,15 +147,19 @@
     ;; if first move use a corner to increase opponent error prob
     (if first-move
       (rand-nth [[0 0] [0 max] [max 0] [max max]])
-      (if (= (second center) \?)
+      (if center
+        ;(println "center")
         (first center)
+        ;empty-corners
         (if (not-empty opposite-corner)
+          ;(println opposite-corner)
           opposite-corner
           (if (not-empty empty-corners)
             (rand-nth empty-corners)
             (rand-nth empty-sides)
             )
-          ))
+          )
+        )
       )
     )
   )
@@ -222,7 +172,8 @@
   )
 
 (defn best-next-move [board player opponent]
-  (let [my-options (future-boards player board \?)
+  (let [
+        my-options  (future-boards player board \?)
         his-options (future-boards opponent board \?)
         winners  (remove nil? (map (fn [n]
                                      (let [coords (first n)
@@ -253,21 +204,90 @@
         his-forks (remove nil? (map #(forks % opponent) potential-loses))
         ]
     (if (not-empty winners)
-      winners
+      (rand-nth winners)
       (if (not-empty losers)
-        losers
+        (rand-nth losers)
         (if (not-empty my-forks)
           (first my-forks)
           (if (not-empty his-forks)
             (first his-forks)
             (first-moves board player opponent)
+            ;(println "first m,oves")
             )
           )
         )
       )
     )
   )
+(def empty-board [[\? \? \?]
+                  [\? \? \?]
+                  [\? \? \?]])
 
+(def board (atom nil))
+(def current-player (atom nil))
+(def game-on (atom true))
+(defn make-a-move [player board coords]
+  (let [indexed (index-board board)
+        selected (first (filter #(= (first %) coords) indexed))
+        ]
+    (if (= (second selected) \?)
+      (apply-action player board coords)
+      )
+    )
+  )
+(-main)
+;@board
+;;@current-player
+;matrix
+;(best-next-move matrix \o \x)
+;(best-next-move @board \o \x)
+;(future-boards \o @board \?)
+(defn -main
+  "I don't do a whole lot ... yet."
+  [& args]
+  (reset! board empty-board)
+  (reset! current-player \x)
+  (reset! game-on true)
+  (println "")
+  (println "introduce coord [r c] USER (x) first")
+  (while @game-on
+    (println (str "Current player: " @current-player))
+    (doall (map println @board))
+    (Thread/sleep 1000)
+    (let [input (if (= @current-player \x)
+                  (str/split (read-line) #" "))
+          move (if (= @current-player \x)
+                 [(Integer. (re-find #"\d+" (first input))) (Integer. (re-find #"\d+" (second input)))]
+                 (best-next-move @board \o \x)
+                 )
+          next-board (make-a-move @current-player @board move)
+          ]
+      ;(doall (map println next-board))
+      (if next-board
+        (do
+          (reset! board next-board)
+               (let [winner (winner @board)]
+                 (if (not-empty winner)
+                   (do
+                     (println "winner!!!!!")
+                     (println winner)
+                     (reset! game-on false)
+                     )
+                   (if (not-empty (find-with-val @board \?))
+                     (reset! current-player (if (= @current-player \x) \o \x))
+                     (reset! game-on false)
+                     )
+                   )
+                 ))
+        (println "wrong move!")
+        )
+
+      )
+    )
+
+
+
+  )
 (comment
   (remove #(or (= % '[0 0]) (= % '[max max])) '[[0 0] [0 max] [max 0] [max max]])
   (first-moves forking-matrix \x \o)
@@ -291,7 +311,7 @@
   (best-next-move sides-matrix \x \o)
   (best-next-move forking-matrix \o \x)
   (def matrix [[\? \? \?]
-               [\x \? \?]
+               [\? \x \?]
                [\? \? \?]])
   (def matrix2 [[\x \o \o]
                 [\x \x \?]
@@ -300,7 +320,7 @@
 
   (forks matrix)
   (best-next-move matrix \x \o)
-  (best-next-move matrix \o \x)
+
   (best-next-move matrix2 \x \o)
   matrix
   (future-boards \x matrix \?)
