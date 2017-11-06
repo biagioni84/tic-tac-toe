@@ -1,10 +1,62 @@
 (ns tic-tac.core
+  (:require [clojure.string :as str]
+            )
   (:gen-class))
-
+(def empty-board [[\? \? \?]
+                   [\? \? \?]
+                   [\? \? \?]])
+(-main)
+(def board (atom nil))
+(def current-player (atom nil))
+(def game-on (atom true))
+(defn make-a-move [player board coords]
+  (let [indexed (index-board board)
+        selected (first (filter #(= (first %) coords) indexed))
+        ]
+    (if (= (second selected) \?)
+      (apply-action player board coords)
+      )
+    )
+  )
+@board
+@current-player
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
-  (println "Hello, World!"))
+  (reset! board empty-board)
+  (reset! current-player \x)
+  (doall (map println empty-board))
+  (doall
+    (println "")
+  (println "introduce coord [r c] USER (x) first"))
+  (flush)
+  (while @game-on
+    (println (str "Current player: " @current-player))
+    (Thread/sleep 1000)
+    (let [input (str/split (read-line) #" ")
+          move [(Integer. (re-find #"\d+" (first input))) (Integer. (re-find #"\d+" (second input)))]
+          next-board (make-a-move @current-player @board move)
+          ]
+      (doall (map println next-board))
+      (reset! board next-board)
+      (let [winner (winner @board)]
+        (if (not-empty winner)
+          (do
+            (println winner)
+            (reset! game-on false)
+            )
+          (if (not-empty (find-with-val @board \?))
+            (reset! current-player (if (= @current-player \x) \o \x))
+            (reset! game-on false)
+            )
+          )
+        )
+      )
+    )
+
+
+
+  )
 
 ;; TODO: use https://github.com/mikera/core.matrix
 (defn columns [matrix]
@@ -162,9 +214,10 @@
     )
   )
 
-(defn forks [new player]
-  (if (= (get (second new) player) 2)
-    (first new)
+(defn forks [winnable player]
+  "find if player makes a fork deducing from winnables [[0 0] {o 1}]"
+  (if (= (get (second winnable) player) 2)
+    (first winnable)
     )
   )
 
@@ -288,64 +341,4 @@
   ;(map (fn [n] (map #(= % \?) n))  matrix)
   (keep second (find-with-val matrix \?))
 
-  ;previous: has-moves? is-there-a-winner? (it can be assumed theres no previous winner?)
-  ;winner?
-  ;block
-  ;fork
-  ;block-fork
-  ;center
-  ;opposite-corner
-  ;empty-corner
-  ;empty-side
-  )
-
-  ;(println (type h))
-  ;(println (type v))
-  ;(println (type d1))
-  ;(println (type d2))
-  ;(println h)
-  ;(println v)
-  ;(println d1)
-  ;(println d2)
-  ;(println all)
-  (winner (get-lines matrix))
-  (rseq matrix)
-  (filter #(not= % \?))
-          (\x \? \? \? \? \? \? \?))
-  (#(not= % \?) \x)
-  (winner matrix2)
-  (winner [[\o \o \x]
-           [\x \o \?]
-           [\x \? \o]])
-  (apply conj (diagonals matrix2))
-  (type (diagonals matrix2))
-  (columns matrix2)
-  (is-square matrix)
-  (cons '(\x \o) \o)
-  (is-square [[1 2][3 4][5 6]])
-
-  (count (map count matrix))
-  (map count [[1 2][3 4][5 6]])
-  (def matrix [[:x :o :?]
-               [:x :o :?]
-               [:x :? :?]])
-  (def matrix [[\x \o \x]
-               [\x \x \?]
-               [\x \? \?]])
-  (def matrix2 [[\o \o \x]
-           [\x \x \?]
-           [\x \? \?]])
-  (apply #(map list %1 %2 %3) matrix)
-  (apply #(map list %1 %2 %3) [[1 2][3 4][5 6]])
-  (map + [1 2][3 4])
-  (apply (fn [a b c] (list (first a) (first b) (first c))) matrix)
-
-  (def row [:x :o :?])
-  row
-  matrix
-  (diagonals matrix2)
-  (line-winner [\x  \x  \?])
-  (line-winner [\? \? \?])
-  (line-winner [\x \x \x])
-  (line-winner [\? \x  \?])
   )
