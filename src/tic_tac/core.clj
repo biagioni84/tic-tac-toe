@@ -110,6 +110,7 @@
                   board))
   )
 
+
 (defn first-moves [board player opponent]
   "center/opposite corner/empty corner/empty side"
   (let [indexed (index-board board)
@@ -152,8 +153,7 @@
         (first center)
         ;empty-corners
         (if (not-empty opposite-corner)
-          ;(println opposite-corner)
-          opposite-corner
+          (rand-nth opposite-corner)
           (if (not-empty empty-corners)
             (rand-nth empty-corners)
             (rand-nth empty-sides)
@@ -164,10 +164,22 @@
     )
   )
 
-(defn minimax [state]
-  ;; return action for max-value (state)
-  )
+(def current-player (atom nil))
 (def one (atom true))
+(defn utility [state]
+  ;(println state)
+  (let [winner (first (winner (second state)))
+        end-of-game (= (count (find-with-val (second state) \?)) 0)]
+    (if winner
+      (if (= winner @current-player)
+        10
+        -10)
+      (if end-of-game
+        0 )
+      )
+    )
+  )
+(defn min-value [])
 (defn max-value [state]
   (let [util (utility state)
         my-move (first state)]
@@ -225,19 +237,6 @@
 
 
 
-(defn utility [state]
-  ;(println state)
-  (let [winner (first (winner (second state)))
-        end-of-game (= (count (find-with-val (second state) \?)) 0)]
-    (if winner
-      (if (= winner @current-player)
-        10
-        -10)
-      (if end-of-game
-        0 )
-      )
-    )
-  )
 
 (defn forks [winnable player]
   "find if player makes a fork deducing from winnables [[0 0] {o 1}]"
@@ -299,7 +298,7 @@
                   [\? \? \?]])
 
 (def board (atom nil))
-(def current-player (atom nil))
+
 (def game-on (atom true))
 (defn make-a-move [player board coords]
   (let [indexed (index-board board)
@@ -317,6 +316,18 @@
 ;(best-next-move matrix \o \x)
 ;(best-next-move @board \o \x)
 ;(future-boards \o @board \?)
+(def m
+[
+[\o \x \?]
+[\x \o \o]
+[\x \o \x]])
+(def m
+      [[\x \? \?]
+       [\o \o \x]
+       [\x \? \o]])
+(best-next-move m \x \o)
+(def l (make-a-move \x m [0 2]))
+(not-empty (find-with-val l \?))
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
@@ -329,16 +340,18 @@
     (println (str "Current player: " @current-player))
     (doall (map println @board))
     (Thread/sleep 1000)
-    (let [input (if (= @current-player \x)
-                  (str/split (read-line) #" "))
+    (let [
+          ;input (if (= @current-player \x)
+          ;        (str/split (read-line) #" "))
           move (if (= @current-player \x)
-                 [(Integer. (re-find #"\d+" (first input))) (Integer. (re-find #"\d+" (second input)))]
-                 ;(best-next-move @board \o \x)
+                 ;[(Integer. (re-find #"\d+" (first input))) (Integer. (re-find #"\d+" (second input)))]
+                 (best-next-move @board \x \o)
                  (first (max-value [nil @board]))
                  )
           next-board (make-a-move @current-player @board move)
           ]
       ;(doall (map println next-board))
+      (println move)
       (if next-board
         (do
           (reset! board next-board)
@@ -355,7 +368,9 @@
                      )
                    )
                  ))
-        (println "wrong move!")
+        (do
+          (println "wrong move!")
+        (println move))
         )
 
       )
