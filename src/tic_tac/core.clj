@@ -164,6 +164,81 @@
     )
   )
 
+(defn minimax [state]
+  ;; return action for max-value (state)
+  )
+(def one (atom true))
+(defn max-value [state]
+  (let [util (utility state)
+        my-move (first state)]
+    ;(println "max")
+    ;(if @one (println state))
+    (reset! one false)
+
+    (if util
+      [(first state) util]
+      (let [vals (remove nil?  (map min-value (future-boards @current-player (second state) \?)))
+            k (if (not-empty vals) (apply max-key second vals))
+            ]
+        ;(println "max-vals")
+        ;(println vals) ;; mayor q 1 o falla el max-key
+        ;(println k)
+        (if k
+          (if (first state) [(first state) (second k)] k)
+          (println "---------- NO K ----------");(into () [[my-move -100]])
+          )
+        )
+      )
+    )
+  ;; check if terminal and return score
+  ;; calculate succesor states
+  ;; find max between -inf and min-value (s)
+  ;; return max value
+  )
+
+(defn min-value [state]
+  (let [util (utility state)
+        my-move (first state)]
+    ;(println "min")
+    ;(println state)
+    (if util
+      [(first state) util]
+      (let [vals (remove nil? (map max-value (future-boards (if (= @current-player \x) \o \x) (second state) \?)))
+            k (if (not-empty vals) (apply min-key second vals))
+            ]
+        ;(println "min-vals")
+        ;(println vals) ;; mayor q 1 o falla el max-key
+        ;(println k)
+        (if k
+          (if (first state) [(first state) (second k)] k)
+          (println "---------- NO K ----------");(into () [[my-move -100]])
+          )
+        )
+      )
+    )
+  ;; check if terminal and return score
+  ;; calculate succesor states
+  ;; find min between +inf and max-value (s)
+  ;; return min value
+  )
+
+
+
+
+(defn utility [state]
+  ;(println state)
+  (let [winner (first (winner (second state)))
+        end-of-game (= (count (find-with-val (second state) \?)) 0)]
+    (if winner
+      (if (= winner @current-player)
+        10
+        -10)
+      (if end-of-game
+        0 )
+      )
+    )
+  )
+
 (defn forks [winnable player]
   "find if player makes a fork deducing from winnables [[0 0] {o 1}]"
   (if (= (get (second winnable) player) 2)
@@ -235,7 +310,7 @@
       )
     )
   )
-(-main)
+;(-main)
 ;@board
 ;;@current-player
 ;matrix
@@ -258,7 +333,8 @@
                   (str/split (read-line) #" "))
           move (if (= @current-player \x)
                  [(Integer. (re-find #"\d+" (first input))) (Integer. (re-find #"\d+" (second input)))]
-                 (best-next-move @board \o \x)
+                 ;(best-next-move @board \o \x)
+                 (first (max-value [nil @board]))
                  )
           next-board (make-a-move @current-player @board move)
           ]
@@ -289,6 +365,25 @@
 
   )
 (comment
+  (def matrix2 [[\x \? \?]
+                [\o \o \x]
+                [\x \? \o]])
+  (reset! current-player \x)
+  (max-value [nil matrix2])
+
+  (def matrix2 [[\x \? \?]
+                [\o \o \?]
+                [\x \? \?]])
+  @current-player
+  (reset! current-player \x)
+  (first (winner matrix2))
+  (utility matrix2)
+
+  (max-value [[10 10] matrix2])
+
+  (utility [[10 10] matrix2])
+  (future-boards \x matrix2 \?)
+  (winner matrix2)
   (remove #(or (= % '[0 0]) (= % '[max max])) '[[0 0] [0 max] [max 0] [max max]])
   (first-moves forking-matrix \x \o)
   (first-moves empty-matrix \x \o)
