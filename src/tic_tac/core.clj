@@ -208,6 +208,7 @@
   ;; return max value
   )
 
+;; TODO: make a pmap version and compare with ab
 (defn min-value [state]
   (let [util (utility state)
         my-move (first state)]
@@ -234,9 +235,66 @@
   ;; return min value
   )
 
+(defn max-value-ab [state alpha beta])
+(defn min-value-ab [state alpha beta]
+  (let [util (utility state)
+        my-move (first state)]
+    (if util
+      [my-move util]
+      (let [r (reduce (fn [val col]
+                        (let [m (max-value-ab col alpha (second val))
+                              ret (if (< (second m) (second val))
+                                    m
+                                    val
+                                    )
+                              ]
+                          (if (and (not= beta 1000) (<=  (second ret) alpha) )
+                            (reduced ret)
+                            )
+                          ret
+                          )
+                        )
+                      [[100 100] 1000]
+                      (future-boards (if (= @current-player \x) \o \x) (second state) \?))
+            ]
+        (if my-move
+          [my-move (second r)]
+          r
+          )
+        )
+      )
+    )
+  )
 
-
-
+(defn max-value-ab [state alpha beta]
+  (let [util (utility state)
+        my-move (first state)]
+    (if util
+      [(first state) util]
+      (let [r (reduce (fn [val col]
+                        (let [m (min-value-ab col (second val) beta)
+                              ret (if (> (second m) (second val))
+                                    m
+                                    val
+                                    )
+                             ]
+                          (if (and (not= alpha -1000) (<= beta (second ret)))
+                              (reduced ret)
+                            )
+                          ret
+                          )
+                        )
+                      [[100 100] -1000]
+                      (future-boards @current-player (second state) \?))
+            ]
+        (if my-move
+          [my-move (second r)]
+          r
+          )
+        )
+      )
+    )
+  )
 
 (defn forks [winnable player]
   "find if player makes a fork deducing from winnables [[0 0] {o 1}]"
@@ -316,18 +374,6 @@
 ;(best-next-move matrix \o \x)
 ;(best-next-move @board \o \x)
 ;(future-boards \o @board \?)
-(def m
-[
-[\o \x \?]
-[\x \o \o]
-[\x \o \x]])
-(def m
-      [[\x \? \?]
-       [\o \o \x]
-       [\x \? \o]])
-(best-next-move m \x \o)
-(def l (make-a-move \x m [0 2]))
-(not-empty (find-with-val l \?))
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
@@ -339,14 +385,14 @@
   (while @game-on
     (println (str "Current player: " @current-player))
     (doall (map println @board))
-    (Thread/sleep 1000)
+    ;(Thread/sleep 1000)
     (let [
           ;input (if (= @current-player \x)
           ;        (str/split (read-line) #" "))
           move (if (= @current-player \x)
                  ;[(Integer. (re-find #"\d+" (first input))) (Integer. (re-find #"\d+" (second input)))]
                  (best-next-move @board \x \o)
-                 (first (max-value [nil @board]))
+                 (first (max-value-ab [nil @board] -1000 1000))
                  )
           next-board (make-a-move @current-player @board move)
           ]
@@ -380,6 +426,26 @@
 
   )
 (comment
+  (def m
+    [[\? \? \?]
+     [\? \o \?]
+     [\x \? \o]])
+
+  (reset! current-player \x)
+  (max-value-ab [nil m] -1000 1000)
+  (def m
+    [
+     [\o \x \?]
+     [\x \o \o]
+     [\x \o \x]])
+  (def m
+    [[\x \? \?]
+     [\o \o \x]
+     [\x \? \o]])
+  (best-next-move m \x \o)
+  (def l (make-a-move \x m [0 2]))
+  (not-empty (find-with-val l \?))
+
   (def matrix2 [[\x \? \?]
                 [\o \o \x]
                 [\x \? \o]])
