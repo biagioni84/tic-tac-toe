@@ -118,7 +118,7 @@
         size (count board)
         max (- size 1)
         med (/ max 2)
-        center (first (filter #(and (= (first %) (= (second %) \?)) [med med]) indexed))
+        center (first (filter #(and (= (first %) [med med]) (= (second %) \?) ) indexed))
         empty-corners (map #(first %) (filter #(and (or (= (first %) [0 0])
                                                         (= (first %) [0 max])
                                                         (= (first %) [max 0])
@@ -146,6 +146,7 @@
                             indexed))
         ]
     ;; if first move use a corner to increase opponent error prob
+    (println center)
     (if first-move
       (rand-nth [[0 0] [0 max] [max 0] [max max]])
       (if center
@@ -179,6 +180,110 @@
       )
     )
   )
+(defn min-value-pmap [state])
+(defn max-value-pmap [state]
+  (let [util (utility state)
+        my-move (first state)]
+    ;(println "max")
+    ;(if @one (println state))
+    (reset! one false)
+
+    (if util
+      [(first state) util]
+      (let [vals (remove nil? (pmap min-value-pmap (future-boards @current-player (second state) \?)))
+            k (if (not-empty vals) (apply max-key second vals))
+            ]
+        ;(println "max-vals")
+        ;(println vals) ;; mayor q 1 o falla el max-key
+        ;(println k)
+        (if k
+          (if (first state) [(first state) (second k)] k)
+          (println "---------- NO K ----------");(into () [[my-move -100]])
+          )
+        )
+      )
+    )
+  ;; check if terminal and return score
+  ;; calculate succesor states
+  ;; find max between -inf and min-value (s)
+  ;; return max value
+  )
+
+
+(defn min-value-pmap [state]
+  (let [util (utility state)
+        my-move (first state)]
+    ;(println "min")
+    ;(println state)
+    (if util
+      [(first state) util]
+      (let [vals (remove nil? (pmap max-value-pmap (future-boards (if (= @current-player \x) \o \x) (second state) \?)))
+            k (if (not-empty vals) (apply min-key second vals))
+            ]
+        ;(println "min-vals")
+        ;(println vals) ;; mayor q 1 o falla el max-key
+        ;(println k)
+        (if k
+          (if (first state) [(first state) (second k)] k)
+          (println "---------- NO K ----------");(into () [[my-move -100]])
+          )
+        )
+      )
+    )
+  ;; check if terminal and return score
+  ;; calculate succesor states
+  ;; find min between +inf and max-value (s)
+  ;; return min value
+  )
+
+(defn min-value-ideep [state level])
+(defn max-value-ideep [state level]
+  (let [util (utility state)
+        my-move (first state)]
+    (if util
+      [(first state) util]
+      (if (= level 0)
+        [(first state) 0]
+        (let [vals (remove nil?  (map #(min-value-ideep % (dec level)) (future-boards @current-player (second state) \?)))
+              k (if (not-empty vals) (apply max-key second vals))
+              ]
+          ;(println "max-vals")
+          ;(println vals) ;; mayor q 1 o falla el max-key
+          ;(println k)
+          (if k
+            (if (first state) [(first state) (second k)] k)
+            (println "---------- NO K ----------");(into () [[my-move -100]])
+            )
+          )
+        )
+      )
+    )
+  )
+
+
+(defn min-value-ideep [state level]
+  (let [util (utility state)
+        my-move (first state)]
+    (if util
+      [(first state) util]
+      (if (= level 0)
+        [(first state) 0]
+        (let [vals (remove nil? (map #(max-value-ideep % (dec level)) (future-boards (if (= @current-player \x) \o \x) (second state) \?)))
+              k (if (not-empty vals) (apply min-key second vals))
+              ]
+          ;(println "min-vals")
+          ;(println vals) ;; mayor q 1 o falla el max-key
+          ;(println k)
+          (if k
+            (if (first state) [(first state) (second k)] k)
+            (println "---------- NO K ----------") ;(into () [[my-move -100]])
+            )
+          )
+        )
+      )
+    )
+  )
+
 (defn min-value [])
 (defn max-value [state]
   (let [util (utility state)
@@ -208,7 +313,7 @@
   ;; return max value
   )
 
-;; TODO: make a pmap version and compare with ab
+
 (defn min-value [state]
   (let [util (utility state)
         my-move (first state)]
@@ -295,7 +400,66 @@
       )
     )
   )
+(defn max-value-ab-rand [state alpha beta])
+(defn min-value-ab-rand [state alpha beta]
+  (let [util (utility state)
+        my-move (first state)]
+    (if util
+      [my-move util]
+      (let [r (reduce (fn [val col]
+                        (let [m (max-value-ab col alpha (second val))
+                              ret (if (< (second m) (second val))
+                                    m
+                                    val
+                                    )
+                              ]
+                          (if (and (not= beta 1000) (<= (second ret) alpha))
+                            (reduced ret)
+                            )
+                          ret
+                          )
+                        )
+                      [[100 100] 1000]
+                      (shuffle (future-boards (if (= @current-player \x) \o \x) (second state) \?)))
+            ]
+        (if my-move
+          [my-move (second r)]
+          r
+          )
+        )
+      )
+    )
+  )
 
+(defn max-value-ab-rand [state alpha beta]
+  (let [util (utility state)
+        my-move (first state)]
+    (if util
+      [(first state) util]
+      (let [r (reduce (fn [val col]
+                        (let [m (min-value-ab col (second val) beta)
+                              ret (if (> (second m) (second val))
+                                    m
+                                    val
+                                    )
+                              ]
+                          (if (and (not= alpha -1000) (<= beta (second ret)))
+                            (reduced ret)
+                            )
+                          ret
+                          )
+                        )
+                      [[100 100] -1000]
+                      (shuffle (future-boards @current-player (second state) \?)))
+            ]
+        (if my-move
+          [my-move (second r)]
+          r
+          )
+        )
+      )
+    )
+  )
 (defn forks [winnable player]
   "find if player makes a fork deducing from winnables [[0 0] {o 1}]"
   (if (= (get (second winnable) player) 2)
@@ -367,6 +531,8 @@
       )
     )
   )
+
+
 ;(-main)
 ;@board
 ;;@current-player
@@ -374,6 +540,52 @@
 ;(best-next-move matrix \o \x)
 ;(best-next-move @board \o \x)
 ;(future-boards \o @board \?)
+(def start-time (atom nil))
+(def play-time-x (atom 0))
+(def play-time-o (atom 0))
+
+(repeatedly 10 #(-main))
+;; DONE: timekeeping
+;; DONE: make a pmap version and compare with ab
+;; DONE: implement randomness on minimax (rand order of future boards)
+;; DONE: depth level limiting
+;; DONE: find optimal depth level ==> 2 !!
+
+;; TODO:
+;; symmetry recogn to reduce tree options?
+;; predictive modelling?
+;; progressive deepening?
+;; NegaScout?
+;; TODO: 8-puzzle
+(comment
+  "x = bestmove, o = max-value-ab, x's first, 10 plays"
+  "x:24.413481 o:11253.817577"
+  "x = bestmove, o = max-value-ab, o's first, 10 plays"
+  "x:18.38725 o:100551.096312"
+
+  "x = max-value, o = max-value-ab, x's first, 10 plays"
+  "x:103639.180915 o:11060.427525"
+  "x = max-value, o = max-value-ab, o's first, 10 plays"
+  "x:11654.861062 o:102315.418369"
+  "-----> ab pruning not doing too much??"
+
+  "x = max-value-pmap, o = max-value-ab, x's first, 10 plays"
+  "OutOfMemoryError unable to create new native thread  java.lang.Thread.start0 (Thread.java:-2)\n"
+
+
+  "x = max-value-rand, o = max-value-ab, x's first, 10 plays"
+  "x:101491.200252 o:11497.97137"
+  "x = max-value-rand, o = max-value-ab, o's first, 10 plays"
+  "x:11004.388851 o:101704.630212"
+
+  "x = max-value-ideep, o = max-value-ab, x's first, 10 plays depth=4"
+  "x:919.472522 o:10872.075267"
+  "x = max-value-ideep, o = max-value-ab, x's first, 10 plays depth=3"
+  "x:166.63179 o:11409.982519"
+  "x = max-value-ideep, o = max-value-ab, x's first, 10 plays depth=2"
+  "x:33.211772 o:11259.547563"
+  "====> on depth=1 we start losing"
+  )
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
@@ -384,18 +596,27 @@
   (println "introduce coord [r c] USER (x) first")
   (while @game-on
     (println (str "Current player: " @current-player))
-    (doall (map println @board))
+    ;(doall (map println @board))
     ;(Thread/sleep 1000)
+    (reset! start-time (System/nanoTime))
     (let [
           ;input (if (= @current-player \x)
           ;        (str/split (read-line) #" "))
           move (if (= @current-player \x)
                  ;[(Integer. (re-find #"\d+" (first input))) (Integer. (re-find #"\d+" (second input)))]
-                 (best-next-move @board \x \o)
+                 ;(best-next-move @board \x \o)
+                 ;(first (max-value-pmap [nil @board]))
+                 ;(first (max-value-ab-rand [nil @board] -1000 1000))
+                 (first (max-value-ideep [nil @board] 2))
                  (first (max-value-ab [nil @board] -1000 1000))
                  )
           next-board (make-a-move @current-player @board move)
           ]
+      (if (= @current-player \x)
+        (swap! play-time-x #(+ % (- (System/nanoTime) @start-time)))
+        (swap! play-time-o #(+ % (- (System/nanoTime) @start-time)))
+        )
+
       ;(doall (map println next-board))
       (println move)
       (if next-board
@@ -421,10 +642,23 @@
 
       )
     )
-
-
-
+  (println "Stats:")
+  (println (str "x:" (/ @play-time-x 1e6)))
+  (println (str "o:" (/ @play-time-o 1e6)))
   )
+
+(def m
+  [[\? \? \?]
+   [\? \? \?]
+   [\x \? \o]])
+(def empty-board [[\? \? \?]
+                  [\? \? \?]
+                  [\? \? \?]])
+(future-boards @current-player empty-board \?)
+(find-with-val empty-board \?)
+(reset! current-player \x)
+(max-value-ideep [nil m] 1)
+
 (comment
   (def m
     [[\? \? \?]
@@ -470,7 +704,7 @@
   (first-moves empty-matrix \x \o)
   (first-moves sides-matrix \x \o)
   (first-moves start-matrix \o \x)
-  (def empty-matrix [[\? \? \?]
+  (def empty-matrix [[\o \? \?]
                      [\? \? \?]
                      [\? \? \?]])
   (def forking-matrix [[\? \? \o]
