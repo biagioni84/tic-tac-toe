@@ -1,11 +1,14 @@
 (ns tic-tac.core
+  (:refer-clojure :exclude [* - + == / < <= > >= not= = min max])
   (:require [clojure.string :as str]
+            [clojure.core.matrix :refer :all]
+            [clojure.core.matrix.operators :refer :all]
             )
   (:gen-class))
 
 
 ;; TODO: use https://github.com/mikera/core.matrix
-(defn columns [matrix]
+(defn cols [matrix]
   "get list of columns in matrix"
    (apply (partial map list) matrix))
 
@@ -53,7 +56,7 @@
   "extracts ascending diagonal, desc diag, columns right to left, rows top to bottom
   (we dont need order for playing tic tac toe)"
   (let [h (apply list board)
-        v  (into () (columns board))
+        v  (into () (cols board))
         [d1 d2] (diagonals board)
         all (conj (concat v h) d1 d2)
         ]
@@ -110,7 +113,7 @@
                   board))
   )
 
-
+;(rand-nth (find-with-val @board \?))
 (defn first-moves [board player opponent]
   "center/opposite corner/empty corner/empty side"
   (let [indexed (index-board board)
@@ -243,7 +246,7 @@
     (if util
       [(first state) util]
       (if (= level 0)
-        [(first state) 0]
+        [(first state) -1]
         (let [vals (remove nil?  (map #(min-value-ideep % (dec level)) (future-boards @current-player (second state) \?)))
               k (if (not-empty vals) (apply max-key second vals))
               ]
@@ -267,7 +270,7 @@
     (if util
       [(first state) util]
       (if (= level 0)
-        [(first state) 0]
+        [(first state) -1]
         (let [vals (remove nil? (map #(max-value-ideep % (dec level)) (future-boards (if (= @current-player \x) \o \x) (second state) \?)))
               k (if (not-empty vals) (apply min-key second vals))
               ]
@@ -543,8 +546,8 @@
 (def start-time (atom nil))
 (def play-time-x (atom 0))
 (def play-time-o (atom 0))
-
-(repeatedly 10 #(-main))
+;(-main)
+;(repeatedly 10 #(-main))
 ;; DONE: timekeeping
 ;; DONE: make a pmap version and compare with ab
 ;; DONE: implement randomness on minimax (rand order of future boards)
@@ -552,9 +555,9 @@
 ;; DONE: find optimal depth level ==> 2 !!
 
 ;; TODO:
+;; progressive deepening?
 ;; symmetry recogn to reduce tree options?
 ;; predictive modelling?
-;; progressive deepening?
 ;; NegaScout?
 ;; TODO: 8-puzzle
 (comment
@@ -585,17 +588,158 @@
   "x = max-value-ideep, o = max-value-ab, x's first, 10 plays depth=2"
   "x:33.211772 o:11259.547563"
   "====> on depth=1 we start losing"
+  "x = max-value-progressive, o = max-value-ab, x's first, 10 plays max-depth=2 start=0"
+"x:47.886064\no:11179.915575"
   )
+(defn max-value-progressive [max-depth level]
+  (let [[coord util] (max-value-ideep [nil @board] level)
+        ]
+    (if (and (= util -1) (not= level max-depth))
+      (max-value-progressive max-depth (inc level))
+      coord
+      )
+    )
+  )
+;(max-value-ideep [nil @board] 1)
+;(max-value-progressive 3 0)
+
+
+(def activation-fn (fn [x] (Math/tanh x)))
+(def dactivation-fn (fn [y] (- 1.0 (* y y))))
+
+(defn layer-activation [inputs strengths]
+  "forward propagate the input of a layer"
+  (mapv activation-fn
+        (mapv #(reduce + %)
+              (* inputs (transpose strengths)))))
+
+
+(defn output-deltas [targets outputs]
+  "measures the delta errors for the output layer (Desired value – actual value) and multiplying it by the gradient of the activation function"
+  (* (mapv dactivation-fn outputs)
+     (- targets outputs)))
+
+
+(defn hlayer-deltas [odeltas neurons strengths]
+  (* (mapv dactivation-fn neurons)
+     (mapv #(reduce + %)
+           (* odeltas strengths))))
+
+(defn update-strengths [deltas neurons strengths lrate]
+  (+ strengths (* lrate
+                  (mapv #(* deltas %) neurons))))
+
+
+
+(defn feed-forward [input network]
+  (let [[in i-h-strengths h h-o-strengths out] network
+        new-h (layer-activation input i-h-strengths)
+        new-o (layer-activation new-h h-o-strengths)]
+    [input i-h-strengths new-h h-o-strengths new-o]))
+
+(defn update-weights [network target learning-rate]
+  (let [[ in i-h-strengths h h-o-strengths out] network
+        o-deltas (output-deltas target out)
+        h-deltas (hlayer-deltas o-deltas h h-o-strengths)
+        n-h-o-strengths (update-strengths
+                          o-deltas
+                          h
+                          h-o-strengths
+                          learning-rate)
+        n-i-h-strengths (update-strengths
+                          h-deltas
+                          in
+                          i-h-strengths
+                          learning-rate)]
+    [in n-i-h-strengths h n-h-o-strengths out]))
+(defn train-network [network input target learning-rate]
+  (update-weights (feed-forward input network) target learning-rate))
+
+
+(defn ff [input network]
+  (last (feed-forward input network)))
+
+(defn train-data [network data learning-rate]
+  (if-let [[input target] (first data)]
+    (recur
+      (train-network network input target learning-rate)
+      (rest data)
+      learning-rate)
+    network))
+
+(defn inverse-data []
+  (let [n (rand 1)
+        m 0
+        ]
+    [[n m] [m n]]))
+
+(defn gen-strengths [to from]
+  (let [l (* to from)]
+    (map vec (partition from (repeatedly l #(rand (/ 1 l)))))))
+
+(defn construct-network [num-in num-hidden num-out]
+  (vec (map vec [(repeat num-in 0)
+                 (gen-strengths num-in num-hidden)
+                 (repeat num-hidden 0)
+                 (gen-strengths num-hidden num-out)
+                 (repeat num-out 0)])))
+(def tnn (atom (construct-network 9 45 9)))
+(defn r [c] [(quot c 3) (rem c 3)])
+(defn predict-move[b]
+  (let [next-board (ff b @tnn)
+        new-vals   (map-indexed (fn [i v]
+                                  (if (not= 0 (get b i))
+                                    0
+                                    v
+                                    )
+                                  ) next-board)
+        ret (if (= @current-player \x)
+               (apply max-key second (map-indexed vector new-vals))
+               (apply min-key second (map-indexed vector new-vals)))
+        ]
+    (println ret)
+    (if (= (second ret) 0)
+      (rand-nth (find-with-val @board \?))
+      (r (first ret))
+      )
+    )
+  )
+
+
+
+(r 4)
+(-main)
+@tnn
+;(predict-move (prepare-board @board))
+;(rand-nth (find-with-val @board \?))
+;(reset! tnn (read-string (slurp "180tnn.dat")))
+(reset! tnn (read-string (slurp "45neurons.dat")))
+(spit "45neurons.dat" (pr-str @tnn))
+;(spit "36tnn.dat" (pr-str @tnn))
+(repeatedly  100 #(-main))
+(defn prepare-board [board]
+  (into []
+        (map #(if (= % \?)
+          0
+          (if (= % \x)
+            1
+            -1)) (apply concat board)))
+  )
+
+@wins-o
+@wins-x
+(def wins-o (atom 0))
+(def wins-x (atom 0))
 (defn -main
   "I don't do a whole lot ... yet."
   [& args]
   (reset! board empty-board)
-  (reset! current-player \x)
+  (reset! current-player \o)
   (reset! game-on true)
-  (println "")
-  (println "introduce coord [r c] USER (x) first")
+  ;(println "")
+  ;(println "introduce coord [r c] USER (x) first")
   (while @game-on
-    (println (str "Current player: " @current-player))
+    ;(println (str "Current player: " @current-player))
     ;(doall (map println @board))
     ;(Thread/sleep 1000)
     (reset! start-time (System/nanoTime))
@@ -605,10 +749,15 @@
           move (if (= @current-player \x)
                  ;[(Integer. (re-find #"\d+" (first input))) (Integer. (re-find #"\d+" (second input)))]
                  ;(best-next-move @board \x \o)
+                 (predict-move (prepare-board @board))
+                 (rand-nth (find-with-val @board \?))
+                 ;(best-next-move @board \o \x)
                  ;(first (max-value-pmap [nil @board]))
                  ;(first (max-value-ab-rand [nil @board] -1000 1000))
-                 (first (max-value-ideep [nil @board] 2))
-                 (first (max-value-ab [nil @board] -1000 1000))
+                 ;(first (max-value-ideep [nil @board] 2))
+                 ;(max-value-progressive 2 1)
+                 ;(first (max-value-ab [nil @board] -1000 1000))
+                 ;(first (max-value-ab [nil @board] -1000 1000))
                  )
           next-board (make-a-move @current-player @board move)
           ]
@@ -618,15 +767,31 @@
         )
 
       ;(doall (map println next-board))
-      (println move)
+      ;(println move)
+
       (if next-board
         (do
+          (if (= @current-player \x)
+            (repeatedly 100  (swap! tnn #(train-data % [[(prepare-board @board)
+                                        (prepare-board
+                                          (make-a-move \x @board
+                                                       (first (max-value-ab [nil @board] -1000 1000)
+                                                              )
+                                                       ;(best-next-move @board \x \o)
+                                                       ))]]
+                                    0.1)))
+            ;(swap! tnn #(train-data % [[(prepare-board-inv @board) (prepare-board-inv next-board)]] 0.2))
+            )
           (reset! board next-board)
                (let [winner (winner @board)]
                  (if (not-empty winner)
                    (do
                      (println "winner!!!!!")
                      (println winner)
+                     (if (= (first winner) \x)
+                       (swap! wins-x inc)
+                       (swap! wins-o inc)
+                       )
                      (reset! game-on false)
                      )
                    (if (not-empty (find-with-val @board \?))
@@ -642,9 +807,10 @@
 
       )
     )
-  (println "Stats:")
-  (println (str "x:" (/ @play-time-x 1e6)))
-  (println (str "o:" (/ @play-time-o 1e6)))
+  (doall (map println @board))
+  ;(println "Stats:")
+  ;(println (str "x:" (/ @play-time-x 1e6)))
+  ;(println (str "o:" (/ @play-time-o 1e6)))
   )
 
 (def m
